@@ -1,0 +1,1311 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  BookOpen, 
+  PenTool, 
+  Wallet, 
+  Store, 
+  Sparkles, 
+  Heart, 
+  Printer, 
+  CheckCircle2, 
+  ChevronLeft, 
+  ChevronRight, 
+  Award, 
+  Calendar, 
+  RefreshCw, 
+  Feather, 
+  DollarSign, 
+  Info, 
+  Check, 
+  Bookmark, 
+  Clock, 
+  Send, 
+  HelpCircle,
+  Share2,
+  Trash2,
+  Lock,
+  Plus
+} from 'lucide-react';
+
+// --- PROMPTS INSPIRADORES DIÁRIOS (GATILHOS DE MEMÓRIA) ---
+const PROMPTS_BANCO = [
+  { id: 1, frase: "Batom no Copo", dica: "Lembre-se daquela mulher marcante na sua infância ou de um momento em que você se sentiu extremamente elegante e pronta para o mundo." },
+  { id: 2, frase: "Cheiro de Café Passado", dica: "Evoque as manhãs de domingo na cozinha da sua família, as conversas sem pressa e o som da chaleira fervendo." },
+  { id: 3, frase: "Meu Primeiro Sim", dica: "Pense em uma decisão corajosa que mudou o rumo da sua vida: um trabalho, um casamento, uma viagem ou uma despedida." },
+  { id: 4, frase: "A Cozinha da Mãe", dica: "Descreva os aromas, as panelas velhas e o prato especial que ninguém no mundo conseguia fazer igual." },
+  { id: 5, frase: "A Carta Guardada na Gaveta", dica: "Relembre uma correspondência antiga, um bilhete de escola ou uma palavra escrita à mão que você guardou no coração." },
+  { id: 6, frase: "O Vestido de Flores", dica: "Pense naquela peça de roupa especial que parecia carregar sua alegria toda vez que você a vestia em datas comemorativas." }
+];
+
+// --- DADOS INICIAIS DA VITRINE DA COMUNIDADE ---
+const INICIAL_VITRINE = [
+  {
+    id: 'v1',
+    autora: 'Helena Ribeiro, 64 anos',
+    titulo: 'O Vestido de Chita Amarela',
+    trecho: 'Lembro perfeitamente de 1974. Minha mãe costurou aquele vestido de chita para a festa de São João na vila. Cada ponto daquela agulha carregava o amor silencioso de quem preferia nos ver bonitas a comprar algo para si mesma.',
+    curtidas: 142,
+    comentarios: 18,
+    capaCor: 'from-amber-800 to-amber-950',
+    data: '12 de Maio',
+    precoFisico: 59.90
+  },
+  {
+    id: 'v2',
+    autora: 'Dona Maria de Lourdes, 71 anos',
+    titulo: 'O Primeiro Rádio a Pilha',
+    trecho: 'Juntamos moedas por seis meses. Quando o rádio finalmente chegou, a vizinhança inteira sentou no alpendre para ouvir a radionovela das oito. O som chiar devagar era a música dos nossos maiores sonhos.',
+    curtidas: 209,
+    comentarios: 34,
+    capaCor: 'from-rose-900 to-amber-950',
+    data: '18 de Junho',
+    precoFisico: 64.90
+  },
+  {
+    id: 'v3',
+    autora: 'Clara Silveira, 58 anos',
+    titulo: 'Sombra da Mangueira',
+    trecho: 'Escrever estas memórias me devolveu o abraço do meu pai. Ele descascava mangas com o canivete sem quebrar a casca e nos dava as fatias doces. Esse livro é a minha herança para meus netos.',
+    curtidas: 98,
+    comentarios: 12,
+    capaCor: 'from-emerald-900 to-stone-900',
+    data: '02 de Julho',
+    precoFisico: 49.90
+  }
+];
+
+export default function App() {
+  // --- ESTADOS NAVEGAÇÃO E PÁGINAS ---
+  const [abaAtiva, setAbaAtiva] = useState('inicio'); // inicio | livro | vitrine | carteira
+
+  // Páginas do livro salvas no LocalStorage
+  const [paginas, setPaginas] = useState(() => {
+    const salvas = localStorage.getItem('pagina_por_dia_paginas');
+    if (salvas) {
+      try { return JSON.parse(salvas); } catch (e) { console.error(e); }
+    }
+    return [
+      {
+        id: 'p1',
+        promptFrase: "Batom no Copo",
+        data: '10/10/2026',
+        texto: 'Minha mãe guardava um batom vermelho de bastão dourado na gaveta da penteadeira. Era um luxo reservado aos domingos e às missas das dez. Lembro de ficar olhando escondida ela passar a cor nos lábios em frente ao espelho bisotado...',
+        palavras: 38,
+        caracteres: 231,
+        publicadoVitrine: true
+      },
+      {
+        id: 'p2',
+        promptFrase: "Cheiro de Café Passado",
+        data: '11/10/2026',
+        texto: 'O pano de coar já estava amarelado pelos anos, mas o café da vovó tinha um sabor incomparável. Ela coava sem pressa, jogando a água fervendo em fio fino enquanto nos contava causos do interior.',
+        palavras: 35,
+        caracteres: 215,
+        publicadoVitrine: false
+      }
+    ];
+  });
+
+  // Prompt do dia
+  const [promptIdx, setPromptIdx] = useState(0);
+  const [textoEscrita, setTextoEscrita] = useState('');
+  const [editandoId, setEditandoId] = useState(null);
+
+  // Carteira e Saldo Virtual
+  const [saldo, setSaldo] = useState(() => {
+    const s = localStorage.getItem('pagina_por_dia_saldo');
+    return s ? parseFloat(s) : 48.70;
+  });
+
+  const [extrato, setExtrato] = useState([
+    { id: 't1', desc: 'Bônus de Boas-Vindas à Plataforma', valor: 25.00, tipo: 'credito', data: '15/10/2026' },
+    { id: 't2', desc: 'Incentivo por Páginas Escritas (8 páginas)', valor: 2.80, tipo: 'credito', data: '20/10/2026' },
+    { id: 't3', desc: 'Leituras da sua história na Vitrine', valor: 20.90, tipo: 'credito', data: '24/10/2026' }
+  ]);
+
+  // Capa do Livro da Usuária
+  const [tituloLivro, setTituloLivro] = useState('Minhas Memórias Guardadas');
+  const [subtituloLivro, setSubtituloLivro] = useState('Histórias de Vida, Afeto e Raízes');
+  const [corCapa, setCorCapa] = useState('from-amber-800 to-amber-950');
+
+  // Leitor de Livro Flipbook
+  const [paginaFlip, setPaginaFlip] = useState(0);
+
+  // Modais e Diálogos
+  const [modalModelo, setModalModelo] = useState(false);
+  const [modalPOD, setModalPOD] = useState(false);
+  const [modalPIX, setModalPIX] = useState(false);
+  const [modalPremium, setModalPremium] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+
+  // Formulário do PIX
+  const [tipoPix, setTipoPix] = useState('cpf');
+  const [chavePix, setChavePix] = useState('');
+  const [valorSaque, setValorSaque] = useState('');
+  const [comprovantePix, setComprovantePix] = useState(null);
+
+  // Simulador POD
+  const [podCapa, setPodCapa] = useState('dura'); // dura | brochura
+  const [podPapel, setPodPapel] = useState('polen'); // polen | offset
+  const [podQtdPaginas, setPodQtdPaginas] = useState(80);
+  const [podExemplares, setPodExemplares] = useState(5);
+  const [podPrecoVenda, setPodPrecoVenda] = useState(59.90);
+
+  // Vitrine
+  const [vitrine, setVitrine] = useState(INICIAL_VITRINE);
+
+  // --- PERSISTÊNCIA EM LOCALSTORAGE ---
+  useEffect(() => {
+    localStorage.setItem('pagina_por_dia_paginas', JSON.stringify(paginas));
+  }, [paginas]);
+
+  useEffect(() => {
+    localStorage.setItem('pagina_por_dia_saldo', saldo.toString());
+  }, [saldo]);
+
+  // Mensagem Toast Acolhedora
+  const showToast = (mensagem) => {
+    setToastMsg(mensagem);
+    setTimeout(() => setToastMsg(''), 4000);
+  };
+
+  // Trocar Prompt Diário
+  const proximoPrompt = () => {
+    setPromptIdx((prev) => (prev + 1) % PROMPTS_BANCO.length);
+    showToast("Novo gatilho de memória carregado! 🌿");
+  };
+
+  // Guardar/Salvar Página Escrita
+  const salvarPagina = () => {
+    if (!textoEscrita.trim()) {
+      showToast("Escreva algumas palavras antes de guardar sua memória.");
+      return;
+    }
+
+    const palavras = textoEscrita.trim().split(/\s+/).length;
+    const caracteres = textoEscrita.length;
+
+    if (editandoId) {
+      setPaginas(prev => prev.map(p => p.id === editandoId ? {
+        ...p,
+        texto: textoEscrita,
+        palavras,
+        caracteres
+      } : p));
+      setEditandoId(null);
+      showToast("Página atualizada com carinho no seu livro! ✨");
+    } else {
+      const novaPagina = {
+        id: 'p_' + Date.now(),
+        promptFrase: PROMPTS_BANCO[promptIdx].frase,
+        data: new Date().toLocaleDateString('pt-BR'),
+        texto: textoEscrita,
+        palavras,
+        caracteres,
+        publicadoVitrine: false
+      };
+
+      setPaginas(prev => [...prev, novaPagina]);
+
+      // Recompensa financeira por meta cumprida (+R$ 0,35 por página)
+      const recompensa = 0.35;
+      setSaldo(prev => prev + recompensa);
+      setExtrato(prev => [
+        { id: 't_' + Date.now(), desc: `Página escrita: "${PROMPTS_BANCO[promptIdx].frase}"`, valor: recompensa, tipo: 'credito', data: new Date().toLocaleDateString('pt-BR') },
+        ...prev
+      ]);
+
+      showToast("Sua memória foi salva! Você acumulou +R$ 0,35 na sua carteira ✨");
+    }
+
+    setTextoEscrita('');
+  };
+
+  // Excluir Página
+  const excluirPagina = (id) => {
+    if (confirm("Tem certeza que deseja apagar esta página de memórias?")) {
+      setPaginas(prev => prev.filter(p => p.id !== id));
+      showToast("Página removida do seu livro.");
+    }
+  };
+
+  // Carregar para edição
+  const carregarEdicao = (pag) => {
+    setEditandoId(pag.id);
+    setTextoEscrita(pag.texto);
+    setAbaAtiva('inicio');
+    showToast("Página pronta para ser revisada no editor.");
+  };
+
+  // Alternar Publicação na Vitrine
+  const toggleVitrine = (id) => {
+    setPaginas(prev => prev.map(p => {
+      if (p.id === id) {
+        const est = !p.publicadoVitrine;
+        showToast(est ? "História compartilhada na Vitrine da Comunidade! ❤️" : "História reservada apenas para o seu livro pessoal.");
+        return { ...p, publicadoVitrine: est };
+      }
+      return p;
+    }));
+  };
+
+  // Estatísticas do Livro
+  const totalPalavras = useMemo(() => paginas.reduce((acc, p) => acc + (p.palavras || 0), 0), [paginas]);
+  const tempoLeitura = Math.max(1, Math.round(totalPalavras / 130));
+
+  // Processar Saque via PIX
+  const efetuarSaquePix = (e) => {
+    e.preventDefault();
+    const v = parseFloat(valorSaque);
+    if (isNaN(v) || v <= 0) {
+      alert("Informe um valor válido para o saque.");
+      return;
+    }
+    if (v > saldo) {
+      alert("O valor informado ultrapassa seu saldo disponível.");
+      return;
+    }
+    if (!chavePix.trim()) {
+      alert("Digite sua chave PIX de destino.");
+      return;
+    }
+
+    setSaldo(prev => prev - v);
+    setExtrato(prev => [
+      { id: 's_' + Date.now(), desc: `Saque PIX Enviado (${tipoPix.toUpperCase()}: ${chavePix})`, valor: v, tipo: 'debito', data: new Date().toLocaleDateString('pt-BR') },
+      ...prev
+    ]);
+
+    setComprovantePix({
+      codigo: 'PIX-PAGD-' + Math.floor(100000 + Math.random() * 900000),
+      data: new Date().toLocaleString('pt-BR'),
+      valor: v,
+      chave: chavePix,
+      tipo: tipoPix
+    });
+
+    setValorSaque('');
+    showToast("Transferência PIX realizada com sucesso!");
+  };
+
+  // Cálculo do Simulador POD (Impressão sob demanda)
+  const podCalculo = useMemo(() => {
+    const custoPapelPagina = podPapel === 'polen' ? 0.08 : 0.06;
+    const custoCapaFixa = podCapa === 'dura' ? 18.00 : 9.00;
+    const custoUnidade = custoCapaFixa + (podQtdPaginas * custoPapelPagina);
+    const lucroUnidade = podPrecoVenda - custoUnidade;
+    const investimentoTotal = custoUnidade * podExemplares;
+    const faturamentoEstimado = podPrecoVenda * podExemplares;
+    const lucroTotal = faturamentoEstimado - investimentoTotal;
+
+    return {
+      custoUnidade,
+      lucroUnidade,
+      investimentoTotal,
+      faturamentoEstimado,
+      lucroTotal
+    };
+  }, [podCapa, podPapel, podQtdPaginas, podExemplares, podPrecoVenda]);
+
+  // Ação de Curtir na Vitrine
+  const curtirVitrine = (id) => {
+    setVitrine(prev => prev.map(item => item.id === id ? { ...item, curtidas: item.curtidas + 1 } : item));
+    showToast("Você enviou afeto para esta escritora! ❤️");
+  };
+
+  const promptAtual = PROMPTS_BANCO[promptIdx];
+
+  return (
+    <div className="min-h-screen bg-[#faf7f2] text-amber-950 font-serif flex flex-col justify-between selection:bg-amber-200 selection:text-amber-900">
+      
+      {/* --- NOTIFICAÇÃO TOAST --- */}
+      {toastMsg && (
+        <div className="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 bg-amber-950 text-amber-50 px-6 py-3 rounded-full shadow-xl border border-amber-800 flex items-center space-x-2 animate-bounce text-xs md:text-sm font-sans">
+          <Sparkles className="w-4 h-4 text-amber-300 flex-shrink-0" />
+          <span>{toastMsg}</span>
+        </div>
+      )}
+
+      {/* --- CABEÇALHO DA PLATAFORMA --- */}
+      <header className="bg-[#f4efe6] border-b border-amber-200/80 sticky top-0 z-30 shadow-xs backdrop-blur-md bg-opacity-90">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+          
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setAbaAtiva('inicio')}>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-800 to-amber-600 flex items-center justify-center text-amber-50 shadow-md">
+              <Feather className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-amber-950 font-serif leading-none">Página por Dia</h1>
+              <p className="text-[10px] text-amber-800 font-sans tracking-wide uppercase font-medium mt-0.5">Escrita Afetiva & Biografias</p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 md:space-x-3">
+            <button 
+              onClick={() => setModalModelo(true)}
+              className="hidden sm:flex items-center space-x-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 px-3 py-1.5 rounded-full text-xs font-sans font-medium transition-all"
+              title="Entenda como esta plataforma se sustenta"
+            >
+              <Info className="w-3.5 h-3.5 text-amber-700" />
+              <span>Modelo de Negócio</span>
+            </button>
+
+            <div 
+              onClick={() => setAbaAtiva('carteira')}
+              className="flex items-center space-x-2 bg-emerald-50 border border-emerald-200 hover:border-emerald-400 px-3 py-1.5 rounded-full cursor-pointer transition-all shadow-xs"
+            >
+              <Wallet className="w-4 h-4 text-emerald-700" />
+              <div className="text-right">
+                <span className="text-[9px] text-emerald-800 uppercase font-sans font-bold block leading-none">Sua Carteira</span>
+                <span className="text-xs md:text-sm font-bold text-emerald-950 font-sans">R$ {saldo.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* --- CORPO PRINCIPAL COM TROCA DE ABAS --- */}
+      <main className="max-w-5xl mx-auto px-4 py-6 flex-1 w-full">
+        
+        {/* ==========================================
+            ABA 1: INÍCIO & EDITOR DE ESCRITA
+           ========================================== */}
+        {abaAtiva === 'inicio' && (
+          <div className="space-y-6 max-w-3xl mx-auto">
+            
+            {/* Boas-Vindas & Barra de Progresso do Livro */}
+            <div className="bg-gradient-to-r from-amber-900 via-amber-800 to-amber-950 rounded-2xl p-6 text-amber-50 shadow-md relative overflow-hidden">
+              <div className="relative z-10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="inline-flex items-center space-x-2 bg-amber-800/80 px-3 py-1 rounded-full text-xs text-amber-200 font-sans">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>{new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+                  </div>
+
+                  <span className="text-xs font-sans bg-amber-700/60 border border-amber-500/40 px-3 py-1 rounded-full text-amber-100 font-medium">
+                    {paginas.length} de 30 Páginas Recomendadas
+                  </span>
+                </div>
+
+                <h2 className="text-2xl md:text-3xl font-serif font-bold">Escreva uma página da sua vida hoje.</h2>
+                <p className="text-amber-200/90 text-xs md:text-sm font-sans max-w-xl">
+                  Não se preocupe com regras gramaticais ou regras rígidas. O mais importante é resgatar o afeto e eternizar suas memórias.
+                </p>
+
+                {/* Barra de Progresso Visual */}
+                <div className="pt-2">
+                  <div className="w-full bg-amber-950/60 h-2.5 rounded-full overflow-hidden border border-amber-700/50">
+                    <div 
+                      className="bg-amber-300 h-full rounded-full transition-all duration-500" 
+                      style={{ width: `${Math.min(100, (paginas.length / 30) * 100)}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between text-[10px] font-sans text-amber-300 mt-1">
+                    <span>Início do projeto</span>
+                    <span>{Math.round((paginas.length / 30) * 100)}% do livro concluído</span>
+                    <span>Volume I (30 Págs)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Cartão da Senha do Dia (Gatilho de Memória) */}
+            <div className="bg-white rounded-2xl border border-amber-200 shadow-md p-6 relative overflow-hidden">
+              <div className="flex items-start justify-between border-b border-amber-100 pb-4 mb-4">
+                <div>
+                  <div className="flex items-center space-x-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <span className="text-xs font-sans font-bold uppercase tracking-wider text-amber-800">Senha de Hoje (Gatilho de Memória)</span>
+                  </div>
+                  <h3 className="text-2xl md:text-3xl font-serif font-bold text-amber-950 mt-1">
+                    "{promptAtual.frase}"
+                  </h3>
+                </div>
+
+                <button 
+                  onClick={proximoPrompt}
+                  className="p-2 text-amber-800 hover:bg-amber-50 rounded-full transition-colors flex items-center space-x-1 text-xs font-sans border border-amber-200 shadow-xs"
+                  title="Mudar o tema de hoje"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Trocar Senha</span>
+                </button>
+              </div>
+
+              {/* Dica da Mentora */}
+              <div className="bg-amber-50/80 border-l-4 border-amber-500 p-3.5 rounded-r-xl mb-5 font-sans">
+                <p className="text-xs font-bold text-amber-900 uppercase mb-0.5 flex items-center gap-1">
+                  <Feather className="w-3.5 h-3.5 text-amber-700" /> Para te inspirar:
+                </p>
+                <p className="text-xs md:text-sm text-amber-900 italic">{promptAtual.dica}</p>
+              </div>
+
+              {/* Editor Aconchegante */}
+              <div className="space-y-3">
+                <div className="relative">
+                  <textarea
+                    value={textoEscrita}
+                    onChange={(e) => setTextoEscrita(e.target.value)}
+                    placeholder="Comece a escrever devagar... Quais eram os sons, os cheiros e as pessoas presentes nessa lembrança?"
+                    className="w-full h-56 p-4 rounded-xl border border-amber-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none resize-none font-serif text-base text-amber-950 placeholder-amber-400/80 leading-relaxed bg-[#fcfaf7]"
+                  ></textarea>
+
+                  {/* Contador de Palavras e Caracteres */}
+                  <div className="absolute bottom-3 right-4 flex items-center space-x-3 text-xs font-sans text-amber-800 bg-white/90 px-3 py-1 rounded-full border border-amber-200 shadow-xs">
+                    <span><strong>{textoEscrita.trim() ? textoEscrita.trim().split(/\s+/).length : 0}</strong> palavras</span>
+                    <span>•</span>
+                    <span><strong>{textoEscrita.length}</strong> caracteres</span>
+                  </div>
+                </div>
+
+                {/* Botão de Ação */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                  <div className="text-xs text-amber-800 font-sans flex items-center space-x-1">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                    <span>Salvamento automático ativado. +R$ 0,35 por página escrita.</span>
+                  </div>
+
+                  <div className="flex items-center space-x-2 w-full sm:w-auto">
+                    {editandoId && (
+                      <button
+                        onClick={() => { setEditandoId(null); setTextoEscrita(''); }}
+                        className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl border border-amber-300 text-amber-900 hover:bg-amber-100 text-xs font-sans font-medium transition-colors"
+                      >
+                        Cancelar Edição
+                      </button>
+                    )}
+                    <button
+                      onClick={salvarPagina}
+                      className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-amber-900 hover:bg-amber-950 text-amber-50 text-xs font-sans font-bold flex items-center justify-center space-x-2 transition-all shadow-md"
+                    >
+                      <Bookmark className="w-4 h-4" />
+                      <span>{editandoId ? 'Atualizar Página' : 'Guardar no Livro (+R$ 0,35)'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Resumo do Progresso Escrito */}
+            <div className="bg-[#f5efe6] rounded-2xl p-5 border border-amber-200/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-200 text-amber-950 flex items-center justify-center font-bold text-lg font-serif">
+                  {paginas.length}
+                </div>
+                <div>
+                  <h4 className="font-serif font-bold text-amber-950">Histórias Registradas</h4>
+                  <p className="text-xs font-sans text-amber-800">Total de {totalPalavras} palavras • ~{tempoLeitura} min de leitura da sua vida</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setAbaAtiva('livro')}
+                className="w-full sm:w-auto px-4 py-2.5 bg-white hover:bg-amber-50 border border-amber-300 text-amber-950 text-xs font-sans font-bold rounded-xl transition-colors flex items-center justify-center space-x-1.5 shadow-xs"
+              >
+                <BookOpen className="w-4 h-4 text-amber-700" />
+                <span>Folhear Meu Livro</span>
+              </button>
+            </div>
+
+          </div>
+        )}
+
+        {/* ==========================================
+            ABA 2: LEITOR INTERATIVO & FLIPBOOK
+           ========================================== */}
+        {abaAtiva === 'livro' && (
+          <div className="space-y-6">
+            
+            {/* Título da Seção */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-amber-200 pb-4">
+              <div>
+                <h2 className="text-2xl font-serif font-bold text-amber-950">Seu Livro em Construção</h2>
+                <p className="text-xs font-sans text-amber-800">Personalize a capa e navegue pelas páginas do seu livro impresso.</p>
+              </div>
+
+              <button
+                onClick={() => setModalPOD(true)}
+                className="px-4 py-2 bg-gradient-to-r from-amber-800 to-amber-950 text-amber-50 text-xs font-sans font-bold rounded-xl shadow-md flex items-center justify-center space-x-1.5"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Simular Impressão Física</span>
+              </button>
+            </div>
+
+            {/* VISUALIZADOR ESTILO FLIPBOOK */}
+            <div className="max-w-3xl mx-auto">
+              <div className="bg-stone-900 rounded-3xl p-4 md:p-8 shadow-2xl relative min-h-[420px] flex flex-col justify-between border-4 border-amber-900/40">
+                
+                {/* PÁGINA 0 = CAPA PERSONALIZÁVEL */}
+                {paginaFlip === 0 ? (
+                  <div className={`w-full h-80 md:h-96 rounded-2xl bg-gradient-to-br ${corCapa} p-6 text-amber-100 flex flex-col justify-between shadow-inner relative overflow-hidden border border-amber-600/30`}>
+                    
+                    <div className="space-y-2 relative z-10">
+                      <div className="text-[10px] uppercase tracking-widest font-sans text-amber-300 border-b border-amber-500/40 pb-1.5">
+                        Edição Familiar Especial • Volume I
+                      </div>
+                      
+                      {/* Edição do Título na Capa */}
+                      <input 
+                        type="text" 
+                        value={tituloLivro} 
+                        onChange={(e) => setTituloLivro(e.target.value)}
+                        className="bg-transparent border-b border-dashed border-amber-400/50 text-2xl md:text-3xl font-serif font-bold w-full outline-none text-amber-50 focus:border-amber-200"
+                        title="Clique para mudar o título"
+                      />
+
+                      <input 
+                        type="text" 
+                        value={subtituloLivro} 
+                        onChange={(e) => setSubtituloLivro(e.target.value)}
+                        className="bg-transparent border-b border-dashed border-amber-400/30 text-xs md:text-sm font-sans w-full outline-none text-amber-200/90"
+                        title="Clique para mudar o subtítulo"
+                      />
+                    </div>
+
+                    {/* Controles de Estilo da Capa */}
+                    <div className="relative z-10 flex items-center justify-between pt-4 border-t border-amber-700/50">
+                      <div>
+                        <span className="text-[9px] uppercase font-sans text-amber-300 block">Autora</span>
+                        <p className="font-serif text-sm font-bold text-amber-100">Sua Assinatura de Vida</p>
+                      </div>
+
+                      {/* Seletor de Tons de Capa */}
+                      <div className="flex items-center space-x-1.5 bg-amber-950/40 p-1.5 rounded-full border border-amber-700/40">
+                        <button onClick={() => setCorCapa('from-amber-800 to-amber-950')} className="w-5 h-5 rounded-full bg-amber-900 border border-amber-300" title="Terracota Classic"></button>
+                        <button onClick={() => setCorCapa('from-rose-900 to-amber-950')} className="w-5 h-5 rounded-full bg-rose-900 border border-amber-300" title="Vinho Afetivo"></button>
+                        <button onClick={() => setCorCapa('from-emerald-900 to-stone-900')} className="w-5 h-5 rounded-full bg-emerald-900 border border-amber-300" title="Verde Suave"></button>
+                        <button onClick={() => setCorCapa('from-stone-800 to-amber-950')} className="w-5 h-5 rounded-full bg-stone-800 border border-amber-300" title="Café Nobre"></button>
+                      </div>
+                    </div>
+
+                  </div>
+                ) : (
+                  /* PÁGINA INTERNA DO LIVRO */
+                  <div className="bg-[#fcfaf7] rounded-2xl p-6 md:p-8 text-amber-950 min-h-[340px] md:min-h-[380px] shadow-md flex flex-col justify-between border border-amber-200 relative">
+                    
+                    {paginas[paginaFlip - 1] ? (
+                      <>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between border-b border-amber-100 pb-2">
+                            <span className="text-xs font-sans text-amber-800 font-medium">Página {paginaFlip} de {paginas.length}</span>
+                            <span className="text-[11px] font-sans text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-full font-bold">
+                              "{paginas[paginaFlip - 1].promptFrase}"
+                            </span>
+                          </div>
+
+                          <p className="font-serif text-base md:text-lg leading-relaxed text-amber-950 whitespace-pre-line pt-2">
+                            {paginas[paginaFlip - 1].texto}
+                          </p>
+                        </div>
+
+                        {/* Rodapé da Página */}
+                        <div className="flex items-center justify-between pt-4 border-t border-amber-100 text-xs font-sans text-amber-800">
+                          <span>Registrado em {paginas[paginaFlip - 1].data}</span>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => toggleVitrine(paginas[paginaFlip - 1].id)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${paginas[paginaFlip - 1].publicadoVitrine ? 'bg-emerald-100 text-emerald-900 font-bold' : 'bg-amber-100 text-amber-900 hover:bg-amber-200'}`}
+                            >
+                              {paginas[paginaFlip - 1].publicadoVitrine ? '✓ Na Vitrine' : '+ Publicar na Vitrine'}
+                            </button>
+                            <button
+                              onClick={() => carregarEdicao(paginas[paginaFlip - 1])}
+                              className="px-2 py-1 text-amber-900 hover:bg-amber-100 rounded-lg"
+                            >
+                              Editar
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-64 text-center space-y-3">
+                        <Feather className="w-8 h-8 text-amber-400" />
+                        <p className="text-amber-800 font-serif">Esta página ainda não foi escrita.</p>
+                        <button 
+                          onClick={() => setAbaAtiva('inicio')} 
+                          className="px-4 py-2 bg-amber-900 text-amber-50 text-xs rounded-xl font-sans font-bold"
+                        >
+                          Escrever Agora
+                        </button>
+                      </div>
+                    )}
+
+                  </div>
+                )}
+
+                {/* CONTROLES DE NAVEGAÇÃO ENTRE PÁGINAS */}
+                <div className="flex items-center justify-between text-stone-300 font-sans text-xs pt-4">
+                  <button
+                    disabled={paginaFlip === 0}
+                    onClick={() => setPaginaFlip(p => Math.max(0, p - 1))}
+                    className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 disabled:opacity-30 transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Anterior</span>
+                  </button>
+
+                  <span className="text-amber-200/90 font-medium">
+                    {paginaFlip === 0 ? 'Capa Principal' : `Página ${paginaFlip} de ${paginas.length}`}
+                  </span>
+
+                  <button
+                    disabled={paginaFlip >= paginas.length}
+                    onClick={() => setPaginaFlip(p => Math.min(paginas.length, p + 1))}
+                    className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 disabled:opacity-30 transition-colors"
+                  >
+                    <span>Próxima</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+              </div>
+            </div>
+
+            {/* GERENCIADOR DE PÁGINAS DO LIVRO */}
+            <div className="bg-white rounded-2xl p-6 border border-amber-200 shadow-xs space-y-4">
+              <h3 className="text-lg font-serif font-bold text-amber-950 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-amber-700" />
+                <span>Índice das Suas Memórias ({paginas.length})</span>
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {paginas.map((p, idx) => (
+                  <div key={p.id} className="p-4 rounded-xl border border-amber-100 bg-[#faf8f5] flex flex-col justify-between space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between text-xs text-amber-800 mb-1 font-sans">
+                        <span className="font-bold">Página #{idx + 1}</span>
+                        <span>{p.data}</span>
+                      </div>
+                      <h4 className="font-serif font-bold text-amber-950 mb-1">"{p.promptFrase}"</h4>
+                      <p className="text-xs text-amber-900/90 font-serif line-clamp-3 leading-relaxed">
+                        {p.texto}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-amber-100 pt-2 text-xs font-sans">
+                      <span className="text-amber-700">{p.palavras || 0} palavras</span>
+                      <div className="flex items-center space-x-2">
+                        <button onClick={() => setPaginaFlip(idx + 1)} className="text-amber-900 hover:underline font-medium">
+                          Ver no Livro
+                        </button>
+                        <span>•</span>
+                        <button onClick={() => carregarEdicao(p)} className="text-amber-900 hover:underline font-medium">
+                          Editar
+                        </button>
+                        <span>•</span>
+                        <button onClick={() => excluirPagina(p.id)} className="text-rose-700 hover:underline">
+                          Apagar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ==========================================
+            ABA 3: VITRINE DA COMUNIDADE (MARKETPLACE)
+           ========================================== */}
+        {abaAtiva === 'vitrine' && (
+          <div className="space-y-6">
+            
+            <div className="bg-gradient-to-r from-amber-100 via-amber-50 to-rose-50 rounded-2xl p-6 border border-amber-200">
+              <div className="max-w-2xl space-y-2">
+                <span className="text-xs font-sans font-bold uppercase text-amber-800 tracking-wider">Mercado do Livro Afetivo</span>
+                <h2 className="text-2xl font-serif font-bold text-amber-950">Vitrine da Comunidade de Autoras</h2>
+                <p className="text-xs md:text-sm font-sans text-amber-800 leading-relaxed">
+                  Conheça e apoie os relatos de outras mulheres. A cada leitura e curtida acumulada na vitrine, a autora recebe renda direta em sua carteira virtual.
+                </p>
+              </div>
+            </div>
+
+            {/* LISTA DE HISTÓRIAS NA VITRINE */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {vitrine.map((item) => (
+                <div key={item.id} className="bg-white rounded-2xl border border-amber-200 shadow-md overflow-hidden flex flex-col justify-between hover:shadow-lg transition-shadow">
+                  
+                  <div className="p-6 space-y-4">
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold font-serif text-sm text-amber-50 bg-gradient-to-tr ${item.capaCor}`}>
+                        {item.autora.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="font-serif font-bold text-amber-950 text-base leading-tight">{item.titulo}</h3>
+                        <p className="text-xs font-sans text-amber-800">{item.autora}</p>
+                      </div>
+                    </div>
+
+                    <p className="text-xs md:text-sm font-serif leading-relaxed text-amber-950/90 italic bg-amber-50/60 p-4 rounded-xl border border-amber-100">
+                      "{item.trecho}"
+                    </p>
+                  </div>
+
+                  <div className="p-4 bg-[#fbf9f5] border-t border-amber-100 space-y-3">
+                    <div className="flex items-center justify-between text-xs font-sans text-amber-800">
+                      <button 
+                        onClick={() => curtirVitrine(item.id)}
+                        className="flex items-center space-x-1 hover:text-rose-600 transition-colors bg-white px-2.5 py-1 rounded-full border border-amber-200 shadow-xs"
+                      >
+                        <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
+                        <span>{item.curtidas} Amores</span>
+                      </button>
+
+                      <span className="text-amber-800">{item.comentarios} comentários</span>
+                    </div>
+
+                    <button 
+                      onClick={() => showToast(`Solicitação de exemplar físico de "${item.titulo}" enviada!`)}
+                      className="w-full py-2 bg-amber-900 hover:bg-amber-950 text-amber-50 text-xs font-sans font-bold rounded-xl transition-colors flex items-center justify-center space-x-1.5 shadow-xs"
+                    >
+                      <Store className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Comprar Livro Físico (R$ {item.precoFisico.toFixed(2)})</span>
+                    </button>
+                  </div>
+
+                </div>
+              ))}
+            </div>
+
+            {/* SUAS HISTÓRIAS NA VITRINE */}
+            <div className="bg-white rounded-2xl p-6 border border-amber-200 shadow-xs space-y-3">
+              <h3 className="text-base font-serif font-bold text-amber-950">Suas Páginas Publicadas na Vitrine</h3>
+              {paginas.filter(p => p.publicadoVitrine).length === 0 ? (
+                <p className="text-xs font-sans text-amber-800 italic">
+                  Você ainda não colocou nenhuma página na Vitrine pública. Acesse a aba "Meu Livro" e ative a opção em qualquer página para começar a receber leituras e gerar renda!
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {paginas.filter(p => p.publicadoVitrine).map(p => (
+                    <div key={p.id} className="flex items-center justify-between p-3 bg-amber-50 rounded-xl text-xs font-sans border border-amber-200">
+                      <div>
+                        <span className="font-bold text-amber-950 font-serif">"{p.promptFrase}"</span>
+                        <span className="text-amber-800 ml-2">• Publicado em {p.data}</span>
+                      </div>
+                      <span className="text-emerald-800 font-bold bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-300 text-[11px]">
+                        Gerando Leitura & Royalties
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+
+        {/* ==========================================
+            ABA 4: CARTEIRA DA AUTORA & SAQUE PIX
+           ========================================== */}
+        {abaAtiva === 'carteira' && (
+          <div className="space-y-6 max-w-3xl mx-auto">
+            
+            {/* SALDO PRINCIPAL */}
+            <div className="bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-950 rounded-3xl p-6 md:p-8 text-emerald-50 shadow-xl relative overflow-hidden">
+              <div className="relative z-10 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs uppercase font-sans font-bold tracking-wider text-emerald-200">Saldo Disponível para Saque</span>
+                  <div className="flex items-center space-x-1 bg-emerald-800/80 px-3 py-1 rounded-full text-xs font-sans text-emerald-200 border border-emerald-700">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Conta Verificada</span>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-3xl md:text-5xl font-sans font-bold tracking-tight">
+                    R$ {saldo.toFixed(2)}
+                  </div>
+                  <p className="text-xs text-emerald-200/90 font-sans mt-1">
+                    Acumulado por páginas escritas (+R$ 0,35/pág), leituras na vitrine e vendas sob demanda.
+                  </p>
+                </div>
+
+                <div className="pt-2 flex flex-wrap gap-3">
+                  <button
+                    onClick={() => setModalPIX(true)}
+                    className="px-6 py-3 bg-emerald-400 hover:bg-emerald-300 text-emerald-950 font-sans font-bold text-xs md:text-sm rounded-xl transition-all shadow-md flex items-center space-x-2"
+                  >
+                    <Send className="w-4 h-4" />
+                    <span>Solicitar Saque via PIX</span>
+                  </button>
+
+                  <button
+                    onClick={() => setModalModelo(true)}
+                    className="px-4 py-3 bg-emerald-800/60 hover:bg-emerald-800 text-emerald-100 font-sans text-xs rounded-xl transition-all border border-emerald-700 flex items-center space-x-1"
+                  >
+                    <HelpCircle className="w-4 h-4 text-emerald-300" />
+                    <span>Origem dos Rendimentos</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* FONTES DE GANHO */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-amber-200 shadow-xs">
+                <span className="text-[10px] font-sans font-bold uppercase text-amber-800">Incentivo por Escrita</span>
+                <p className="text-lg font-bold font-sans text-amber-950 mt-1">R$ {(paginas.length * 0.35).toFixed(2)}</p>
+                <span className="text-[10px] font-sans text-emerald-700 font-medium">{paginas.length} páginas x R$ 0,35</span>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-amber-200 shadow-xs">
+                <span className="text-[10px] font-sans font-bold uppercase text-amber-800">Leituras da Vitrine</span>
+                <p className="text-lg font-bold font-sans text-amber-950 mt-1">R$ 20,90</p>
+                <span className="text-[10px] font-sans text-amber-800">42 leitoras ativas</span>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-amber-200 shadow-xs">
+                <span className="text-[10px] font-sans font-bold uppercase text-amber-800">Royalties de Venda POD</span>
+                <p className="text-lg font-bold font-sans text-amber-950 mt-1">R$ 25,00</p>
+                <span className="text-[10px] font-sans text-amber-800">Livros impressos vendidos</span>
+              </div>
+            </div>
+
+            {/* EXTRATO DE MOVIMENTAÇÕES */}
+            <div className="bg-white rounded-2xl p-6 border border-amber-200 shadow-xs space-y-4">
+              <h3 className="text-lg font-serif font-bold text-amber-950 flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-amber-700" />
+                <span>Histórico de Lançamentos e Créditos</span>
+              </h3>
+
+              <div className="divide-y divide-amber-100">
+                {extrato.map((item) => (
+                  <div key={item.id} className="py-3 flex items-center justify-between text-xs font-sans">
+                    <div className="space-y-0.5">
+                      <p className="font-bold text-amber-950 text-sm">{item.desc}</p>
+                      <span className="text-amber-800">{item.data}</span>
+                    </div>
+
+                    <div className={`font-bold text-sm ${item.tipo === 'credito' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      {item.tipo === 'credito' ? '+' : '-'} R$ {item.valor.toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        )}
+
+      </main>
+
+      {/* --- BANNER CLUBE PREMIUM --- */}
+      <div className="bg-gradient-to-r from-amber-900 to-amber-950 border-t border-amber-800 text-amber-100 py-3 px-4">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+          <div className="flex items-center space-x-2">
+            <Sparkles className="w-5 h-5 text-amber-400 flex-shrink-0" />
+            <span className="text-xs sm:text-sm font-sans">
+              Quer ver seu livro narrado em áudio com inteligência artificial afetiva e ilustrações em aquarela?
+            </span>
+          </div>
+          <button
+            onClick={() => setModalPremium(true)}
+            className="px-4 py-1.5 bg-amber-400 hover:bg-amber-300 text-amber-950 font-sans font-bold text-xs rounded-full transition-all shadow-xs"
+          >
+            Clube Premium (R$ 19,90/mês)
+          </button>
+        </div>
+      </div>
+
+      {/* --- BARRA DE NAVEGAÇÃO INFERIOR FIXA --- */}
+      <nav className="bg-white border-t border-amber-200 sticky bottom-0 z-40 shadow-lg">
+        <div className="max-w-md mx-auto px-6 py-2 flex items-center justify-around">
+          
+          <button
+            onClick={() => setAbaAtiva('inicio')}
+            className={`flex flex-col items-center space-y-1 transition-colors ${abaAtiva === 'inicio' ? 'text-amber-950 font-bold' : 'text-amber-800/60 hover:text-amber-950'}`}
+          >
+            <PenTool className="w-5 h-5" />
+            <span className="text-[10px] font-sans">Escrever</span>
+          </button>
+
+          <button
+            onClick={() => setAbaAtiva('livro')}
+            className={`flex flex-col items-center space-y-1 transition-colors ${abaAtiva === 'livro' ? 'text-amber-950 font-bold' : 'text-amber-800/60 hover:text-amber-950'}`}
+          >
+            <BookOpen className="w-5 h-5" />
+            <span className="text-[10px] font-sans">Meu Livro</span>
+          </button>
+
+          <button
+            onClick={() => setAbaAtiva('vitrine')}
+            className={`flex flex-col items-center space-y-1 transition-colors ${abaAtiva === 'vitrine' ? 'text-amber-950 font-bold' : 'text-amber-800/60 hover:text-amber-950'}`}
+          >
+            <Store className="w-5 h-5" />
+            <span className="text-[10px] font-sans">Vitrine</span>
+          </button>
+
+          <button
+            onClick={() => setAbaAtiva('carteira')}
+            className={`flex flex-col items-center space-y-1 transition-colors ${abaAtiva === 'carteira' ? 'text-emerald-800 font-bold' : 'text-amber-800/60 hover:text-amber-950'}`}
+          >
+            <Wallet className="w-5 h-5" />
+            <span className="text-[10px] font-sans">Carteira</span>
+          </button>
+
+        </div>
+      </nav>
+
+      {/* =========================================================================
+          MODAIS E DIÁLOGOS
+         ========================================================================= */}
+
+      {/* 1. MODAL: MODELO DE NEGÓCIOS (5 FONTES DE RECEITA) */}
+      {modalModelo && (
+        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 space-y-6 shadow-2xl border border-amber-200 max-h-[90vh] overflow-y-auto font-sans">
+            
+            <div className="flex items-center justify-between border-b border-amber-100 pb-4">
+              <div>
+                <span className="text-xs font-bold uppercase text-amber-800 tracking-wider">Ecossistema Financeiro</span>
+                <h3 className="text-xl font-serif font-bold text-amber-950">As 5 Fontes de Receita da Plataforma</h3>
+              </div>
+              <button onClick={() => setModalModelo(false)} className="text-amber-800 hover:text-amber-950 font-bold text-lg">✕</button>
+            </div>
+
+            <p className="text-xs md:text-sm text-amber-900 leading-relaxed">
+              O projeto combina a escrita diária e resgate de memórias com impressão gráfica sob demanda (*Print on Demand*) e economia criativa.
+            </p>
+
+            <div className="space-y-3">
+              
+              <div className="p-4 bg-amber-50/80 rounded-2xl border border-amber-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-amber-950 text-sm flex items-center gap-1.5">
+                    <Printer className="w-4 h-4 text-amber-700" /> 1. Impressão Sob Demanda (POD)
+                  </h4>
+                  <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">Margem 100% a 150%</span>
+                </div>
+                <p className="text-xs text-amber-800">
+                  A autora encomenda cópias físicas para netos e familiares. A plataforma imprime via gráfica parceira sem necessidade de estoque prévio.
+                </p>
+              </div>
+
+              <div className="p-4 bg-amber-50/80 rounded-2xl border border-amber-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-amber-950 text-sm flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-700" /> 2. Assinatura do Clube Premium
+                  </h4>
+                  <span className="text-xs font-bold text-amber-900 bg-amber-200 px-2 py-0.5 rounded-full">R$ 19,90 / mês</span>
+                </div>
+                <p className="text-xs text-amber-800">
+                  Acesso a narração das histórias em áudio por IA afetiva, capas em aquarela e revisão ortográfica assistida.
+                </p>
+              </div>
+
+              <div className="p-4 bg-amber-50/80 rounded-2xl border border-amber-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-amber-950 text-sm flex items-center gap-1.5">
+                    <Store className="w-4 h-4 text-amber-700" /> 3. Comissão de Vitrine (Marketplace)
+                  </h4>
+                  <span className="text-xs font-bold text-amber-900 bg-amber-200 px-2 py-0.5 rounded-full">20% por venda</span>
+                </div>
+                <p className="text-xs text-amber-800">
+                  Retenção de 20% sobre cada venda de livro físico ou digital realizada entre leitoras da comunidade.
+                </p>
+              </div>
+
+              <div className="p-4 bg-amber-50/80 rounded-2xl border border-amber-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-amber-950 text-sm flex items-center gap-1.5">
+                    <DollarSign className="w-4 h-4 text-amber-700" /> 4. Pacotes de Micro-Leitura
+                  </h4>
+                  <span className="text-xs font-bold text-amber-900 bg-amber-200 px-2 py-0.5 rounded-full">Micro-transações</span>
+                </div>
+                <p className="text-xs text-amber-800">
+                  Acesso pago a capítulos especiais de biógrafas destaque com repasse direto de royalties para a autora.
+                </p>
+              </div>
+
+              <div className="p-4 bg-amber-50/80 rounded-2xl border border-amber-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-amber-950 text-sm flex items-center gap-1.5">
+                    <Award className="w-4 h-4 text-amber-700" /> 5. Patrocínio B2B & Marcas Afetivas
+                  </h4>
+                  <span className="text-xs font-bold text-amber-900 bg-amber-200 px-2 py-0.5 rounded-full">Parcerias</span>
+                </div>
+                <p className="text-xs text-amber-800">
+                  Patrocínio de marcas voltadas à longevidade e bem-estar nos gatilhos de memória diários.
+                </p>
+              </div>
+
+            </div>
+
+            <button
+              onClick={() => setModalModelo(false)}
+              className="w-full py-3 bg-amber-900 hover:bg-amber-950 text-amber-50 font-bold rounded-xl text-xs uppercase tracking-wider"
+            >
+              Compreendi o Modelo
+            </button>
+
+          </div>
+        </div>
+      )}
+
+      {/* 2. MODAL: CALCULADORA POD (PRINT ON DEMAND) */}
+      {modalPOD && (
+        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 space-y-6 shadow-2xl border border-amber-200 max-h-[90vh] overflow-y-auto font-sans">
+            
+            <div className="flex items-center justify-between border-b border-amber-100 pb-4">
+              <div>
+                <span className="text-xs font-bold uppercase text-amber-800">Calculadora Gráfica Real</span>
+                <h3 className="text-xl font-serif font-bold text-amber-950">Simulador de Impressão do Seu Livro</h3>
+              </div>
+              <button onClick={() => setModalPOD(false)} className="text-amber-800 hover:text-amber-950 font-bold text-lg">✕</button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-amber-900 block mb-1">Tipo de Capa</label>
+                  <select 
+                    value={podCapa} 
+                    onChange={(e) => setPodCapa(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-amber-300 text-xs md:text-sm bg-amber-50/50"
+                  >
+                    <option value="dura">Capa Dura Premium (R$ 18,00 custo base)</option>
+                    <option value="brochura">Capa Brochura Flexível (R$ 9,00 custo base)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-amber-900 block mb-1">Papel do Miolo</label>
+                  <select 
+                    value={podPapel} 
+                    onChange={(e) => setPodPapel(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-amber-300 text-xs md:text-sm bg-amber-50/50"
+                  >
+                    <option value="polen">Pólen Soft 80g (Creme, leitura suave)</option>
+                    <option value="offset">Offset Alvorada 75g (Branco)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-amber-900 block mb-1">Número de Páginas</label>
+                  <input 
+                    type="number" 
+                    value={podQtdPaginas} 
+                    onChange={(e) => setPodQtdPaginas(Number(e.target.value))}
+                    min="20" max="400"
+                    className="w-full p-2.5 rounded-xl border border-amber-300 text-xs md:text-sm bg-amber-50/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-amber-900 block mb-1">Tiragem Desejada (Exemplares)</label>
+                  <input 
+                    type="number" 
+                    value={podExemplares} 
+                    onChange={(e) => setPodExemplares(Number(e.target.value))}
+                    min="1" max="100"
+                    className="w-full p-2.5 rounded-xl border border-amber-300 text-xs md:text-sm bg-amber-50/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-amber-900 block mb-1">Preço de Venda Desejado (R$)</label>
+                  <input 
+                    type="number" 
+                    step="0.10"
+                    value={podPrecoVenda} 
+                    onChange={(e) => setPodPrecoVenda(Number(e.target.value))}
+                    className="w-full p-2.5 rounded-xl border border-amber-300 text-xs md:text-sm bg-amber-50/50 font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-[#fcfaf7] p-5 rounded-2xl border border-amber-200 flex flex-col justify-between space-y-4">
+                <div className="space-y-3">
+                  <h4 className="font-serif font-bold text-amber-950 text-base border-b border-amber-200 pb-2">Valores Estimados</h4>
+                  
+                  <div className="flex justify-between text-xs text-amber-800">
+                    <span>Custo unitário de impressão:</span>
+                    <span className="font-bold">R$ {podCalculo.custoUnidade.toFixed(2)}</span>
+                  </div>
+
+                  <div className="flex justify-between text-xs text-emerald-800 bg-emerald-50 p-2 rounded-lg border border-emerald-200">
+                    <span>Lucro líquido por unidade:</span>
+                    <span className="font-bold">R$ {podCalculo.lucroUnidade.toFixed(2)}</span>
+                  </div>
+
+                  <div className="flex justify-between text-xs text-amber-800">
+                    <span>Investimento total na tiragem:</span>
+                    <span className="font-bold">R$ {podCalculo.investimentoTotal.toFixed(2)}</span>
+                  </div>
+
+                  <div className="flex justify-between text-xs text-emerald-900 font-bold border-t border-amber-200 pt-2">
+                    <span>Lucro total com a venda:</span>
+                    <span>R$ {podCalculo.lucroTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => { setModalPOD(false); showToast("Orçamento enviado para validação da gráfica parceira!"); }}
+                  className="w-full py-3 bg-amber-900 hover:bg-amber-950 text-amber-50 font-bold rounded-xl text-xs shadow-md transition-colors"
+                >
+                  Confirmar Pedido de Impressão
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 3. MODAL: SAQUE PIX COM COMPROVANTE */}
+      {modalPIX && (
+        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-6 shadow-2xl border border-amber-200 font-sans">
+            
+            <div className="flex items-center justify-between border-b border-amber-100 pb-3">
+              <div>
+                <span className="text-xs font-bold uppercase text-emerald-800">Transferência Instantânea</span>
+                <h3 className="text-xl font-serif font-bold text-amber-950">Saque via PIX</h3>
+              </div>
+              <button onClick={() => { setModalPIX(false); setComprovantePix(null); }} className="text-amber-800 hover:text-amber-950 font-bold text-lg">✕</button>
+            </div>
+
+            {comprovantePix ? (
+              <div className="space-y-4 bg-emerald-50 p-5 rounded-2xl border border-emerald-200">
+                <div className="flex items-center space-x-2 text-emerald-900">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                  <span className="font-bold text-sm">Comprovante do PIX</span>
+                </div>
+
+                <div className="space-y-2 text-xs text-emerald-950 border-t border-b border-emerald-200 py-3">
+                  <div className="flex justify-between"><span>Código:</span><span className="font-mono font-bold">{comprovantePix.codigo}</span></div>
+                  <div className="flex justify-between"><span>Data/Hora:</span><span>{comprovantePix.data}</span></div>
+                  <div className="flex justify-between"><span>Chave Destino:</span><span className="font-bold">{comprovantePix.chave}</span></div>
+                  <div className="flex justify-between text-sm font-bold text-emerald-950 pt-1"><span>Valor Enviado:</span><span>R$ {comprovantePix.valor.toFixed(2)}</span></div>
+                </div>
+
+                <button
+                  onClick={() => { setComprovantePix(null); setModalPIX(false); }}
+                  className="w-full py-2.5 bg-emerald-800 text-emerald-50 text-xs font-bold rounded-xl"
+                >
+                  Concluir e Voltar
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={efetuarSaquePix} className="space-y-4">
+                
+                <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-amber-950 flex justify-between items-center">
+                  <span>Saldo disponível:</span>
+                  <span className="font-bold text-sm text-emerald-800">R$ {saldo.toFixed(2)}</span>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-amber-900 block mb-1">Tipo de Chave PIX</label>
+                  <select 
+                    value={tipoPix} 
+                    onChange={(e) => setTipoPix(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-amber-300 text-xs md:text-sm bg-white"
+                  >
+                    <option value="cpf">CPF</option>
+                    <option value="email">E-mail</option>
+                    <option value="telefone">Celular / Telefone</option>
+                    <option value="aleatoria">Chave Aleatória (EVP)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-amber-900 block mb-1">Chave PIX de Destino</label>
+                  <input 
+                    type="text" 
+                    value={chavePix}
+                    onChange={(e) => setChavePix(e.target.value)}
+                    placeholder="Digite sua chave aqui"
+                    required
+                    className="w-full p-2.5 rounded-xl border border-amber-300 text-xs md:text-sm outline-none focus:border-emerald-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-amber-900 block mb-1">Valor a Sacar (R$)</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    max={saldo}
+                    value={valorSaque}
+                    onChange={(e) => setValorSaque(e.target.value)}
+                    placeholder="Ex: 20.00"
+                    required
+                    className="w-full p-2.5 rounded-xl border border-amber-300 text-xs md:text-sm outline-none focus:border-emerald-600 font-bold"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-emerald-50 font-bold text-xs md:text-sm rounded-xl transition-colors shadow-md"
+                >
+                  Transferir via PIX
+                </button>
+              </form>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* 4. MODAL: CLUBE PREMIUM */}
+      {modalPremium && (
+        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-6 shadow-2xl border border-amber-200 font-sans">
+            
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mx-auto">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <h3 className="text-2xl font-serif font-bold text-amber-950">Clube Premium Afetivo</h3>
+              <p className="text-xs text-amber-800">Recursos especiais para o livro da sua vida.</p>
+            </div>
+
+            <div className="space-y-3 text-xs text-amber-900">
+              <div className="flex items-start space-x-2">
+                <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <span><strong>Narração em Áudio:</strong> Voz suave de IA lendo seus episódios para sua família.</span>
+              </div>
+              <div className="flex items-start space-x-2">
+                <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <span><strong>Aquarelas Virtuais:</strong> Ilustrações personalizadas baseadas no seu texto.</span>
+              </div>
+              <div className="flex items-start space-x-2">
+                <Check className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                <span><strong>Revisão Carinhosa:</strong> Apoio de texto respeitando seu estilo e sotaque.</span>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 text-center space-y-1">
+              <span className="text-xs text-amber-800">Mensalidade</span>
+              <div className="text-2xl font-bold font-serif text-amber-950">R$ 19,90 <span className="text-xs font-sans font-normal text-amber-800">/ mês</span></div>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                onClick={() => { setModalPremium(false); showToast("Inscrição no Clube Premium concluída com carinho!"); }}
+                className="w-full py-3 bg-amber-900 hover:bg-amber-950 text-amber-50 font-bold rounded-xl text-xs uppercase"
+              >
+                Assinar Agora
+              </button>
+
+              <button
+                onClick={() => setModalPremium(false)}
+                className="w-full py-2 text-amber-800 hover:text-amber-950 text-xs font-medium"
+              >
+                Voltar
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
